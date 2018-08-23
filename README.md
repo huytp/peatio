@@ -1,139 +1,256 @@
-# Peatio - an open-source crypto currency exchange
+Hướng dẫn cài đặt chi tiết sàn giao dịch mã nguồn mở Peatio trên môi trường production 
+Được cấp phép theo giấy phép MIT.
 
-[![Build Status](https://travis-ci.org/rubykube/peatio.svg?branch=master)](https://travis-ci.org/rubykube/peatio)
-[![Telegram Chat](https://cdn.rawgit.com/Patrolavia/telegram-badge/8fe3382b/chat.svg)](https://t.me/peatio)
+# I. Yêu cầu.
+- Tất cả đều được cài đặt trên hệ điều hành ubuntu.
+- Cần một máy chạy phần mềm peatio với cấu hình tối thiểu: Ram 1GB, bộ nhớ 20GB.
+- Với mỗi cryptocurrency khuyến khích cài đặt trên node riêng, yêu cầu Ram tối thiểu 4GB, bộ nhớ 100GB, riêng node chạy BTC bộ nhớ cần 200GB. Chú ý trong vấn đề mở port, cài đặt iptables hợp lý để đảm bảo độ bảo mật.
 
-## [Peatio.tech](https://www.peatio.tech) Introduction
+# II. Cài đặt.
+## 1.  Cài đặt RVM
+- RVM là một phần mềm dùng để quản lý phiên bản của ruby.
+- Bạn cần chạy những lệnh sau:
 
-Peatio is a free and open-source crypto currency exchange implementation with the Rails framework.
-Peatio.tech is a fork of Peatio designed for micro-services architecture. We have simplified the code
-in order to use only Peatio API with external frontend and server components.
+gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB
+ \curl -sSL https://get.rvm.io | bash
 
-To build your own exchange you should now run Peatio as a backend instead of forking the repository,
-and extend it using other microservices such as [Barong](https://www.github.com/rubykube/barong).
+source /home/ubuntu/.rvm/scripts/rvm echo "source $HOME/.rvm/scripts/rvm" >> ~/.bash_profile
 
-## Mission
+## 2. Cài đặt ruby 2.5.0
+- Hệ thống cần sử dụng ruby phiên bản 2.5.0.
+- Bạn cần chạy lệnh sau:
+rvm install 2.5.0
 
-Our mission is to build an open-source crypto currency exchange with a high performance trading engine and incomparable security. We are moving toward dev/ops best practices of running an enterprise grade exchange.
+## 3.  Cài đặt MYSQL
+- Hệ thống sẽ sử dụng hệ quản lý cơ sở dữ liệu MYSQL.
+- Bạn cần chạy những lệnh sau.
+- Chú ý trong quá trình cài đặt sẽ yêu cầu khai báo mật khẩu cho tài khoản DB root, bận nhập vào và nhớ để sử dụng.
+sudo apt-get install mysql-server mysql-client libmysqlclient-dev
 
-We provide webinar or on site training for installing, configuring and administration best practices of Peatio.
-Feel free to contact us for joining the next training session: [Peatio.tech](https://www.peatio.tech)
+## 4. Cài đặt Redis
+- Redis là một hệ thống lưu trữ key-value trên RAM giúp tối ưu performance, Redis còn có cơ chế sao lưu dữ liệu trên đĩa cứng cho phép phục hồi dữ liệu khi gặp sự cố.
+- Ở hệ thống Peatio, Redis giúp lưu trữ dữ liệu từ các jobs. - Bạn cần chạy những lệnh sau:
+sudo apt-add-repository -y ppa:rwky/redis
+sudo apt-get update
+sudo apt-get install redis-server
 
-Help is greatly appreciated, feel free to submit pull-requests or open issues.
+- Để khởi chạy Redis bạn chạy lệnh sau:
+redis-server &
 
-## Requirements
+## 5. Install RabbitMQ
+- RabbitMQ cung cấp cho lập trình viên một phương tiện trung gian để giao tiếp giữa nhiều thành phần trong một hệ thống lớn, sử dụng giao thức AMQP. Ở hệ thống này RabbitMQ sẽ giao tiếp với Redis và God Deamons.
+- Cần chạy những lệnh sau để cài đặt RebitMQ:
+// Thêm repo của rabbitmq debian 
+sudo apt-add-repository 'deb http://www.rabbitmq.com/debian/ testing main'
+curl http://www.rabbitmq.com/rabbitmq-signing-key-public.asc | sudo apt-key add -
+// Cài đặt rabbitmq
+sudo apt-get update
+sudo apt-get install rabbitmq-server
 
-* Linux / Mac OSX
-* Docker / Kubernetes
-* Ruby 2.5.0
-* Rails 4.2+
-* Redis 2.0+
-* MySQL 5.7
-* RabbitMQ
+- Chạy 2 câu lệnh sau để start rabbitmq
+sudo rabbitmq-plugins enable rabbitmq_management
+sudo service rabbitmq-server restart
 
-Find more details in the [docs directory](docs).
+## 6. Cài đặt Bitcoind
+- Bitcoind là một bitcoin full node, phần mềm này sẽ đồng bộ với tất cả các node bitcoin khác. Đây cũng là phần mềm quản lý ví (wallet). Bitcoind là một phiên bản chạy ở chế độ command (Sử dụng cho các nhà phát triển, chạy ở linux), phiên bản chạy ở giao diện là bitcoin-qt.
+- Để cài đặt ta cần chạy các lệnh sau:
+sudo add-apt-repository ppa:bitcoin/bitcoin
+sudo apt-get update
+sudo apt-get install bitcoind
 
-## Getting Started
+- Tạo thư mục .bitcoin và tạo file config:
+mkdir -p ~/.bitcoin
+touch ~/.bitcoin/bitcoin.conf
+vim ~/.bitcoin/bitcoin.conf
+- Nội dung file bitcoin.conf như sau:
+daemon=1
+testnet=1 #khi chạy mainnet chỉnh lại thành server=1
+rpcuser=USERNAME
+rpcpassword=PASSWORD
+rpcport=18332 #Khi chạy mainnet chỉnh lại thành rpcport=8332
 
-Local development setup:
+// Gửi thông báo tới hệ thống khi nhận được coins
+walletnotify=/usr/local/sbin/rabbitmqadmin publish routing_key=peatio.deposit.coin payload='{"txid":"%s", "currency":"btc"}'
 
-* [Docker compose](https://github.com/rubykube/peatio-workbench)
-* [on Mac OS X](docs/setup-osx.md)
-* [on Ubuntu](docs/setup-ubuntu.md)
+- Khởi chạy bitcoind:
+bitcoind
 
-Production setup:
+- Để dừng chạy lệnh:
+bitcoin-cli stop
+- Tham khảo thêm các lệnh cung cấp cho bitcoin RPC tại: https://en.bitcoin.it/wiki/Original_Bitcoin_client/API_calls_list
 
-* [Deploy production cluster with kite](https://github.com/rubykube/kite/blob/master/README.md)
-* [Kubernetes deployment architecture](docs/architecture.md)
+## 7. Cài đặt PhantomJS
+- Chạy những lệnh sau để cài đặt:
+sudo apt-get update
+sudo apt-get install build-essential chrpath git-core libssl-dev libfontconfig1-dev
 
-## Things You Should Know
+cd /usr/local/share
 
-**RUNNING AN EXCHANGE IS HARD.**
+PHANTOMJS_VERISON=1.9.8
+sudo wget https://bitbucket.org/ariya/phantomjs/downloads/phantomjs-$PHANTOMJS_VERISON-linux-x86_64.tar.bz2
 
-This repository is not a turn key solution and will require engineering and design of security process by your company, with or without our assistance. This repository is one component among many we recommend using for composing an enterprise grade exchange. It is highly recommended to deploy a UAT environment and build automated tests for your needs, including Functional tests, Smoke tests and Security vulnerability scans. You may not need to have an active developer on Peatio source code, however, we recommend the following team setup: 1 dev/ops, 3 frontend developers (react / angular), 2 QA engineers, 1 Security Officer.
+sudo tar xjf phantomjs-$PHANTOMJS_VERISON-linux-x86_64.tar.bz2
 
-**SECURITY KNOWLEDGE IS A REQUIREMENT.**
+sudo ln -s /usr/local/share/phantomjs-$PHANTOMJS_VERISON-linux-x86_64/bin/phantomjs /usr/local/share/phantomjs
+sudo ln -s /usr/local/share/phantomjs-$PHANTOMJS_VERISON-linux-x86_64/bin/phantomjs /usr/local/bin/phantomjs
+sudo ln -s /usr/local/share/phantomjs-$PHANTOMJS_VERISON-linux-x86_64/bin/phantomjs /usr/bin/phantomjs
 
-Peatio cannot protect your customers if you leave your admin password 1234567, or open sensitive ports to public internet. No one can. Running an exchange is a very risky task because you're dealing with money directly. If you don't know how to make your exchange secure, hire an expert.
+## 8. Cài đặt JavaScript Runtime
+- Chạy những lệnh sau để cài đặt:
+curl -sL https://deb.nodesource.com/setup_8.x | sudo bash -
+sudo apt-get install nodejs
 
-You must know what you're doing, there's no shortcut. Please get prepared before you continue:
+## 9. Install ImageMagick
+- Đây là phần mềm hỗ trợ cho việc tải ảnh lên hệ thống.
+sudo apt-get install imagemagick
 
-* Rails knowledge
-* Security knowledge
-* Cloud and Linux administration
-* Docker and Kubernetes administration
-* Micro-services and OAuth 2.0
+## 10. Cài đặt và cấu hình Peatio
+a).  Clone dự án về từ Github của Peatio.
+mkdir project
+cd project
+git clone https://github.com/rubykube/peatio.git
+cd peatio
+git checkout 1-7-stable 
 
-## Features
+- Cài đặt gem:
+gem install bundle
+bundle install
 
-* Designed as high performance crypto currency exchange
-* Built-in high performance matching-engine
-* Built-in [Proof of Solvency](https://iwilcox.me.uk/2014/proving-bitcoin-reserves) Audit
-* Usability and scalability
-* Websocket API and high frequency trading support
-* Support multiple digital currencies (eg. Bitcoin, Litecoin, Dogecoin etc.)
-* API end point for FIAT deposits or payment gateways.
-* Powerful admin dashboard and management tools
-* Highly configurable and extendable
-* Industry standard security out of box
-* Maintained by [peatio.tech](https://www.peatio.tech)
-* [KYC Verification](http://en.wikipedia.org/wiki/Know_your_customer) provided by [Barong](https://www.github.com/rubykube/peatio)
+- Generate những config mặc định được viết sẵn.
+bin/init_config
 
-## API
+- Cài đặt yarn và cài đặt những thư viện sử dụng cho giao diện.
+sudo npm install -g yarn
+bundle exec rake tmp:create yarn:install assets:precompile
 
-You can interact with Peatio through API:
+- Cấu hình lại trong file production.rb
+vi config/environments/production.rb
+tìm và chỉnh vào sau thành: config.assets.compile = true
 
-* [API v2 docs](https://demo.peatio.tech/documents/api_v2?lang=en)
-* [Websocket API docs](https://demo.peatio.tech/documents/websocket_api)
+b). Cài đặt database.
+vi config/database.yml
 
-Here are some API clients/wrappers:
+Cần sửa lại những thông số sau trong database.yml:
+host: localhost
+username: root
+password: [Mật khẩu mà bạn khai báo khi cài đặt mysql]
 
-* [peatio-client-ruby](https://github.com/peatio/peatio-client-ruby) is the official ruby client of both HTTP/Websocket API.
-* [peatio-client-python by JohnnyZhao](https://github.com/JohnnyZhao/peatio-client-python) is a python client written by JohnnyZhao.
-* [peatio-client-python by czheo](https://github.com/JohnnyZhao/peatio-client-python) is a python wrapper similar to peatio-client-ruby written by czheo.
-* [peatioJavaClient](https://github.com/classic1999/peatioJavaClient.git) is a java client written by classic1999.
-* [yunbi-client-php](https://github.com/panlilu/yunbi-client-php) is a php client written by panlilu.
+- Tạo DB, tạo bảng, khởi tạo một số dữ liệu khai báo trong seed:
+RAILS_ENV=production bundle exec rake db:setup
 
-## Custom Styles
+c). Chạy daemons.
+- Yêu cầu phải chạy Rabbitmq và redis trước, ở trên mình đã hướng dẫn chạy 2 ứng dụng này rồi.
+- Hãy chắc chắn bạn đang đứng ở thư mục /peatio
+- Chỉnh lại tham số sau để chạy ở chế độ production:
+vi lib/daemons/daemons.god 
+tại đây chỉnh tham số RAILS_ENV thành:
+RAILS_ENV  = ENV.fetch('RAILS_ENV', 'production')
+- OK, tiến hành start deamon bằng lệnh sau:
+god -c lib/daemons/daemons.god
+d) Khởi tạo liability proof
+RAILS_ENV=production bundle exec rake solvency:liability_proof
 
-Peatio front-end is based Bootstrap 3.0 and Sass, so you can customize the style of your exchange.
+e) Cấu hình trong config/application.yml
+vi config/application.yml
+e1. Cấu hình the Google Authentication
+OAUTH2_SIGN_IN_PROVIDER: google
 
-* change bootstrap default variables in `vars/_bootstrap.css.scss`
-* change peatio custom default variables in `vars/_basic.css.scss`
-* add your custom variables in `vars/_custom.css.scss`
-* add your custom css style in `layouts/_custom.css.scss`
-* add or change features style in `features/_xyz.css.scss`
+GOOGLE_CLIENT_ID: 321905830771-um33gdv48uo38bu3i7hs8gv6er52mpoh.apps.googleusercontent.com
 
-`vars/_custom.css.scss` can overwrite `vars/_basic.css.scss` defined variables
-`layout/_custom.css.scss` can overwrite `layout/_basic.css.scss` and `layoputs/_header.css.scss` style
+GOOGLE_CLIENT_SECRET: isdrFxVDuGCcOHOw6pUWXZvB
 
-## Getting Involved
+- Vào  HYPERLINK "https://console.developers.google.com/"https://console.developers.google.com/ để tạo và lấy những key trên.
 
-Want to report a bug, request a feature, contribute or translate Peatio?
+e2. Cấu hình các thứ khác:
 
-* Browse our [issues](https://github.com/rubykube/peatio/issues),
-  comment on proposals, report bugs.
-* Clone the peatio repo, make some changes according to our development
-  guidelines and issue a pull-request with your changes.
-* If you need technical support or customization service,
-  contact us: [hello@peatio.tech](mailto:hello@peatio.tech)
+ADMIN:  HYPERLINK "mailto:example@example.com"example@example.com #tên email sẽ là admin.
+URL_HOST: peatio.example #tên miền website
 
-## Getting Support and Customization
+f) Tạo secret key:
 
-If you need help with running/deploying/customizing Peatio,
-you can contact us on [peatio.tech](https://www.peatio.tech).
+rake secret
+copy đoạn mã sau khi tạo ra.
+Mở file config/secret.yml
 
-Contact us by email: [hello@peatio.tech](mailto:hello@peatio.tech)
+chỗ production/secret_key_base, thay thế đoạn mã trên vào <%= ENV["SECRET_KEY_BASE"] %>
 
-## License
+g). Khởi động rails server:
 
-Peatio is released under the terms of the [MIT license](http://peatio.mit-license.org).
+bundle exec puma -e production -p 3000 --pidfile tmp/pids/puma.pid -d
 
-## What is Peatio?
+## 11. Run Peatio Trading UI
+cd ~/project
+git clone https://github.com/rubykube/peatio-trading-ui.git
+cd peatio-trading-ui
+git checkout 1-7-stable 
 
-[Peatio](http://en.wikipedia.org/wiki/Pixiu) (Chinese: 貔貅) is a Chinese mythical hybrid creature
-considered to be a very powerful protector to practitioners of Feng Shui.
+- Chỉnh lại code lỗi:
+vi app/views/markets/_market_list.html.erb
+tìm tới dòng 45:
+<%= link_to market.fetch(:name), '/trading/' + market.fetch(:id) %>
+chỉnh lại thành
+<%= link_to market.fetch(:name), '/trading/' + market.fetch(:id).to_s %>
 
-**[This illustration copyright for Peatio Team]**
+- Cài đặt gem:
+bundle install
+- Khởi tạo những config đã cấu hình sẵn.
+bin/init_config
 
-![logo](public/peatio.png)
+- Vào file config/application.yml tìm và cấu hình lại:
+PLATFORM_ROOT_URL: irie.fashion #đường dẫn website chính của bạn
+
+- Giống ở trên, tạo secret key bằng lệnh sau:
+rake secret
+
+Vào file config/secret.yml, tìm dòng production/secret_key_base
+thay thế đoạn mã đã copy ở trên thay thế vào: <%= ENV["SECRET_KEY_BASE"] %>
+
+- Chạy lệnh sau để precompile assets:
+bundle exec rake assets:precompile
+
+- Cấu hình trong production.rb
+vi config/environments/production.rb
+tìm và chỉnh vào sau thành: config.assets.compile = true
+
+- Khởi chạy peatio GUI ở port 4000
+bundle exec puma -e production -p 4000 --pidfile tmp/pids/puma.pid -d
+
+## 12. Cài đặt và cấu hình nginx
+- Cài đặt nginx
+sudo apt-get update
+sudo apt-get install nginx
+sudo ufw allow 'Nginx HTTP'
+systemctl status nginx
+
+- Cấu hình nginx
+ sudo vi /etc/nginx/sites-available/default
+xóa hết tất cả mọi thứ và thay thế thành những đoạn code bên dưới:
+server {
+  server_name http://irie.fashion;
+  listen      80 default_server;
+
+  location ~ ^/(?:trading|trading-ui-assets)\/ {
+    proxy_pass http://127.0.0.1:4000;
+  }
+
+  location / {
+    proxy_pass http://127.0.0.1:3000;
+  }
+}
+
+* ở location thứ nhất, có port 4000 là đang sử dụng từ server peatio GUI.
+Ở location thứ hai, có port 3000 là đang sử dụng từ server peatio.
+server_name chính là tên miền của website.
+
+- Khởi động lại nginx
+sudo systemctl restart nginx
+
+# III. Cấu hình ở trang admin.
+
+Vào bảng quản trị, vào phần currencies, view BTC, 
+- Chỗ JSON RPC endpoint, thay thế thành endpoint của mình (đoạn cấu hình bitcoind)
+ HYPERLINK "http://user/"http://username: HYPERLINK "mailto:password@127.0.0.1"password@127.0.0.1 HYPERLINK "":18332
+
+- Wallet URL template (use #{address} as placeholder): ở testnet thì để thành:
+ HYPERLINK "https://testnet.blockchain.info/address/"https://testnet.blockchain.info/address/ HYPERLINK ""#{address}
+- Transaction URL template (use #{txid} as placeholder): ở testnet để thành: https://testnet.blockchain.info/tx/#{txid}

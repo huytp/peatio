@@ -2,7 +2,7 @@ Member API v2
 =============
 Member API is API which can be used by client application like SPA.
 
-**Version:** 1.8.0.alpha
+**Version:** 1.7.5
 
 **License:** https://github.com/rubykube/peatio/blob/master/LICENSE.md
 
@@ -436,16 +436,6 @@ Member API is API which can be used by client application like SPA.
 
 ### /v2/sessions
 ---
-##### ***POST***
-**Summary:** Create new user session.
-
-**Description:** Create new user session.
-
-**Responses**
-
-| Code | Description |
-| ---- | ----------- |
-| 201 | Create new user session. |
 
 ##### ***DELETE***
 **Summary:** Delete all user sessions.
