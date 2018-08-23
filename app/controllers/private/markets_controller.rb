@@ -14,7 +14,7 @@ module Private
       @ask = params[:ask]
 
       @market        = current_market
-      @markets       = Market.all
+      @markets       = Market.where(visible: true)
       @market_groups = @markets.map(&:ask_unit).uniq
 
       @bids   = @market.bids

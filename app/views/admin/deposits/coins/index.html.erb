@@ -12,7 +12,9 @@
       <% x.currency.code.upcase %>
     <% end %>
     <% t.column 'Member email' do |x| %>
-      <%= link_to x.member.email, url_for([:admin, x.member]), target: '_blank' %>
+      <%- if x.member.present? %>
+        <%= link_to x.member.email, url_for([:admin, x.member]), target: '_blank' %>
+      <% end %>
     <% end %>
     <% t.column :amount do |x| %>
       <code class="text-info"><%= x.amount %></code>
